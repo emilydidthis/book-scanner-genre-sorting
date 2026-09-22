@@ -1,7 +1,7 @@
 export default function HomePage() {
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Book Scanner</h1>
+      <h1 style={styles.title}>Book Scanner Genre Sorting</h1>
       <p style={styles.subtitle}>
         Scan book barcodes to look up titles and organize them by genre.
       </p>

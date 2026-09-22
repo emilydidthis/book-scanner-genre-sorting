@@ -8,7 +8,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Book Scanner",
+  title: "Book Scanner Genre Sorting",
   description: "Scan books and organize them by genre",
 };
 
