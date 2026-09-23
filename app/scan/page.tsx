@@ -36,6 +36,7 @@ export default function ScanPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const bookshelfRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const lastLookupRef = useRef(0);
 
   useEffect(() => {
     fetch("/api/auth-check").then((res) => {
@@ -95,6 +96,10 @@ export default function ScanPage() {
     async (isbn: string) => {
       const trimmed = isbn.trim();
       if (!trimmed) return;
+
+      const now = Date.now();
+      if (now - lastLookupRef.current < 500) return;
+      lastLookupRef.current = now;
 
       if (books.has(trimmed)) {
         setDuplicateNotice(trimmed);
