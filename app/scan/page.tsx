@@ -25,6 +25,8 @@ function getGenreColor(genre: string): string {
   return GENRE_COLORS[genre];
 }
 
+const ISBN_COOLDOWN_MS = 2000;
+
 export default function ScanPage() {
   const [books, setBooks] = useState<Map<string, ScannedBook>>(new Map());
   const [scanOrder, setScanOrder] = useState<string[]>([]);
@@ -33,10 +35,14 @@ export default function ScanPage() {
   const [error, setError] = useState<string | null>(null);
   const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null);
   const [hoveredIsbn, setHoveredIsbn] = useState<string | null>(null);
+  const [scanMode, setScanMode] = useState<"text" | "camera">("text");
+  const [isCameraRunning, setIsCameraRunning] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const bookshelfRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const lastLookupRef = useRef(0);
+  const cooldownsRef = useRef<Map<string, number>>(new Map());
+  const scannerRef = useRef<any>(null);
 
   useEffect(() => {
     fetch("/api/auth-check").then((res) => {
@@ -47,14 +53,16 @@ export default function ScanPage() {
   }, []);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    if (!isLoading) {
+    if (scanMode === "text") {
       inputRef.current?.focus();
     }
-  }, [isLoading]);
+  }, [scanMode]);
+
+  useEffect(() => {
+    if (scanMode === "text" && !isLoading) {
+      inputRef.current?.focus();
+    }
+  }, [isLoading, scanMode]);
 
   useEffect(() => {
     if (bookshelfRef.current) {
@@ -67,6 +75,12 @@ export default function ScanPage() {
     const el = bookshelfRef.current.querySelector(`[data-isbn="${hoveredIsbn}"]`);
     el?.scrollIntoView({ behavior: "smooth", inline: "center" });
   }, [hoveredIsbn]);
+
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
 
   const playSound = useCallback((type: "success" | "duplicate") => {
     try {
@@ -104,8 +118,8 @@ export default function ScanPage() {
       if (!trimmed) return;
 
       const now = Date.now();
-      if (now - lastLookupRef.current < 500) return;
-      lastLookupRef.current = now;
+      const lastScan = cooldownsRef.current.get(trimmed);
+      if (lastScan && now - lastScan < ISBN_COOLDOWN_MS) return;
 
       if (books.has(trimmed)) {
         setDuplicateNotice(trimmed);
@@ -115,6 +129,7 @@ export default function ScanPage() {
         return;
       }
 
+      cooldownsRef.current.set(trimmed, now);
       setIsLoading(true);
       setError(null);
 
@@ -142,8 +157,6 @@ export default function ScanPage() {
         });
 
         setScanOrder((prev) => [...prev, trimmed]);
-
-        setTimeout(() => {}, 1500);
 
         if (book.status === "found") {
           playSound("success");
@@ -174,6 +187,63 @@ export default function ScanPage() {
       lookupIsbn(inputValue);
     }
   };
+
+  const startCamera = useCallback(async () => {
+    setCameraError(null);
+    setScanMode("camera");
+
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      const scanner = new Html5Qrcode("camera-reader");
+      scannerRef.current = scanner;
+
+      await scanner.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
+        },
+        (decodedText: string) => {
+          const digitsOnly = decodedText.replace(/\D/g, "");
+          if (digitsOnly.length === 13) {
+            lookupIsbn(digitsOnly);
+          }
+        },
+        () => {}
+      );
+
+      setIsCameraRunning(true);
+    } catch (err: any) {
+      setCameraError(err?.message || "Could not access camera");
+      setScanMode("text");
+    }
+  }, [lookupIsbn]);
+
+  const stopCamera = useCallback(async () => {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current.clear();
+      } catch {
+        // Already stopped
+      }
+      scannerRef.current = null;
+    }
+    setIsCameraRunning(false);
+  }, []);
+
+  const toggleScanMode = useCallback(async () => {
+    if (scanMode === "camera") {
+      await stopCamera();
+      setScanMode("text");
+    } else {
+      await startCamera();
+    }
+  }, [scanMode, stopCamera, startCamera]);
 
   const deleteGenre = useCallback(
     (genre: string) => {
@@ -238,10 +308,12 @@ export default function ScanPage() {
     setError(null);
     setDuplicateNotice(null);
     setHoveredIsbn(null);
-    GENRE_COLORS;
+    cooldownsRef.current.clear();
     Object.keys(GENRE_COLORS).forEach((k) => delete GENRE_COLORS[k]);
-    inputRef.current?.focus();
-  }, [books.size]);
+    if (scanMode === "text") {
+      inputRef.current?.focus();
+    }
+  }, [books.size, scanMode]);
 
   const scannedBooks = useMemo(
     () => scanOrder.map((isbn) => books.get(isbn)).filter(Boolean) as ScannedBook[],
@@ -278,18 +350,33 @@ export default function ScanPage() {
       </div>
 
       <div style={styles.inputSection}>
-        <input
-          ref={inputRef}
-          style={styles.input}
-          type="text"
-          inputMode="numeric"
-          placeholder="Scan or type ISBN..."
-          value={inputValue}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          disabled={isLoading}
-          autoFocus
-        />
+        {scanMode === "text" ? (
+          <input
+            ref={inputRef}
+            style={styles.input}
+            type="text"
+            inputMode="numeric"
+            placeholder="Scan or type ISBN..."
+            value={inputValue}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            disabled={isLoading}
+            autoFocus
+          />
+        ) : (
+          <div style={styles.cameraContainer}>
+            <div id="camera-reader" style={styles.cameraReader} />
+            {!isCameraRunning && !cameraError && (
+              <div style={styles.cameraLoading}>Starting camera...</div>
+            )}
+            {cameraError && (
+              <div style={styles.cameraErrorText}>{cameraError}</div>
+            )}
+          </div>
+        )}
+        <button style={styles.modeToggle} onClick={toggleScanMode}>
+          {scanMode === "text" ? "📷 Camera" : "⌨️ Type"}
+        </button>
         {isLoading && (
           <span style={styles.loadingIndicator}>Looking up...</span>
         )}
@@ -461,6 +548,49 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     outline: "none",
     backgroundColor: "#fff",
+  },
+  modeToggle: {
+    padding: "10px 14px",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#374151",
+    backgroundColor: "#fff",
+    border: "2px solid #e5e7eb",
+    borderRadius: 8,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  cameraContainer: {
+    flex: 1,
+    maxWidth: 320,
+    minWidth: 260,
+    position: "relative",
+    borderRadius: 8,
+    overflow: "hidden",
+    border: "2px solid #3b82f6",
+  },
+  cameraReader: {
+    width: "100%",
+  },
+  cameraLoading: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f3f4f6",
+    fontSize: 14,
+    color: "#666",
+  },
+  cameraErrorText: {
+    padding: "12px",
+    fontSize: 13,
+    color: "#991b1b",
+    backgroundColor: "#fef2f2",
+    textAlign: "center",
   },
   loadingIndicator: {
     fontSize: 13,
