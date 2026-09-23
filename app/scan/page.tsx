@@ -311,7 +311,7 @@ export default function ScanPage() {
         <>
           <div style={styles.shelfLabel}>Scanned books &rarr;</div>
           <div ref={bookshelfRef} style={styles.bookshelf}>
-            {scannedBooks.map((book) => {
+            {scannedBooks.map((book, index) => {
               const genre = book.genre || "Uncategorized";
               const color = getGenreColor(genre);
               return (
@@ -328,6 +328,7 @@ export default function ScanPage() {
                   onMouseEnter={() => setHoveredIsbn(book.isbn)}
                   onMouseLeave={() => setHoveredIsbn(null)}
                 >
+                  <span style={styles.scanNum}>#{index + 1}</span>
                   <div style={styles.shelfTitle}>
                     {book.title || "Not found"}
                   </div>
@@ -370,6 +371,7 @@ export default function ScanPage() {
               <div style={styles.columnBooks}>
                 {col.books.map((book) => {
                   const isHighlighted = hoveredIsbn === book.isbn;
+                  const scanIndex = scanOrder.indexOf(book.isbn);
                   return (
                     <div
                       key={book.isbn}
@@ -380,6 +382,7 @@ export default function ScanPage() {
                       onMouseEnter={() => setHoveredIsbn(book.isbn)}
                       onMouseLeave={() => setHoveredIsbn(null)}
                     >
+                      <span style={styles.scanNum}>#{scanIndex + 1}</span>
                       <div style={styles.bookTitle}>
                         {book.title ||
                           (book.status === "not_found"
@@ -507,6 +510,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderLeft: "4px solid",
     padding: "8px 10px",
     cursor: "default",
+    position: "relative",
   },
   shelfTitle: {
     fontSize: 11,
@@ -591,6 +595,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 6,
     borderLeft: "3px solid #e5e7eb",
     backgroundColor: "#f9fafb",
+    position: "relative",
   },
   bookCardHighlight: {
     backgroundColor: "#fef9c3",
@@ -601,6 +606,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     color: "#374151",
     lineHeight: 1.3,
+  },
+  scanNum: {
+    position: "absolute",
+    top: 5,
+    right: 7,
+    fontSize: 10,
+    color: "#d1d5db",
+    fontWeight: 600,
   },
   actionBar: {
     display: "flex",
