@@ -509,6 +509,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #e5e7eb",
     borderLeft: "4px solid",
     padding: "8px 10px",
+    paddingRight: 28,
     cursor: "default",
     position: "relative",
   },
@@ -591,6 +592,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   bookCard: {
     padding: "10px 12px",
+    paddingRight: 28,
     borderRadius: 8,
     marginBottom: 6,
     borderLeft: "3px solid #e5e7eb",
