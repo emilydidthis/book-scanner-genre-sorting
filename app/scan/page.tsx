@@ -62,6 +62,12 @@ export default function ScanPage() {
     }
   }, [scanOrder.length]);
 
+  useEffect(() => {
+    if (!hoveredIsbn || !bookshelfRef.current) return;
+    const el = bookshelfRef.current.querySelector(`[data-isbn="${hoveredIsbn}"]`);
+    el?.scrollIntoView({ behavior: "smooth", inline: "center" });
+  }, [hoveredIsbn]);
+
   const playSound = useCallback((type: "success" | "duplicate") => {
     try {
       if (!audioContextRef.current) {
@@ -311,6 +317,7 @@ export default function ScanPage() {
               return (
                 <div
                   key={book.isbn}
+                  data-isbn={book.isbn}
                   style={{
                     ...styles.bookshelfCard,
                     borderLeftColor: color,
