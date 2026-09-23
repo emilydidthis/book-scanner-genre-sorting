@@ -212,13 +212,7 @@ export default function ScanPage() {
       genreMap.get(genre)!.push(book);
     });
 
-    const sorted = Array.from(genreMap.entries()).sort(([a], [b]) => {
-      if (a === "Uncategorized") return 1;
-      if (b === "Uncategorized") return -1;
-      return a.localeCompare(b);
-    });
-
-    return sorted.map(([genre, books]) => ({ genre, books }));
+    return Array.from(genreMap.entries()).map(([genre, books]) => ({ genre, books }));
   }, [books, scanOrder]);
 
   const stats = useMemo(() => {
